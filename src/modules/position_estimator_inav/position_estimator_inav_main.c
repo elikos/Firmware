@@ -234,7 +234,9 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 	int baro_init_cnt = 0;
 	int baro_init_num = 200;
 	float baro_offset = 0.0f;		// baro offset for reference altitude, initialized on start, then adjusted
-	float surface_offset = 0.0f;	// ground level offset from reference altitude
+	float baro_avg = 0.0f;			// baro average reading
+	float sonar_avg = 0.0f;			// flow distance average reading
+	float surface_offset = 0.0f;		// ground level offset from reference altitude
 	float surface_offset_rate = 0.0f;	// surface offset change rate
 	float alt_avg = 0.0f;
 	bool landed = true;
@@ -370,6 +372,7 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 					} else {
 						wait_baro = false;
 						baro_offset /= (float) baro_init_cnt;
+						baro_avg = baro_offset;
 						warnx("baro offs: %.2f", baro_offset);
 						mavlink_log_info(mavlink_fd, "[inav] baro offs: %.2f", baro_offset);
 						local_pos.z_valid = true;
@@ -461,6 +464,7 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 				if (sensor.baro_timestamp != baro_timestamp) {
 					corr_baro = baro_offset - sensor.baro_alt_meter - z_est[0];
 					baro_timestamp = sensor.baro_timestamp;
+					baro_avg += (sensor.baro_alt_meter - baro_avg) * 0.05f;
 					baro_updates++;
 				}
 			}
@@ -478,8 +482,8 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 				if (flow.ground_distance_m > 0.31f && flow.ground_distance_m < 4.0f && att.R[2][2] > 0.7 && flow.ground_distance_m != sonar_prev) {
 					sonar_time = t;
 					sonar_prev = flow.ground_distance_m;
-					corr_sonar = flow.ground_distance_m + surface_offset + z_est[0];
-					corr_sonar_filtered += (corr_sonar - corr_sonar_filtered) * params.sonar_filt;
+					corr_sonar = -(flow.ground_distance_m + surface_offset + z_est[0] - params.flow_z_off);
+					corr_sonar_filtered -= (corr_sonar + corr_sonar_filtered) * params.sonar_filt;
 
 					if (fabsf(corr_sonar) > params.sonar_err) {
 						/* correction is too large: spike or new ground level? */
@@ -504,11 +508,14 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 						/* correction is ok, use it */
 						sonar_valid_time = t;
 						sonar_valid = true;
+
+						/* Calculate average sonar reading to assure minimum usable height is reached */
+						sonar_avg += (flow.ground_distance_m - sonar_avg) * 0.1f;
 					}
 				}
 
 				float flow_q = flow.quality / 255.0f;
-				float dist_bottom = - z_est[0] - surface_offset;
+				float dist_bottom = - z_est[0] - surface_offset + params.flow_z_off;
 
 				if (dist_bottom > 0.3f && flow_q > params.flow_q_min && (t < sonar_valid_time + sonar_valid_timeout) && att.R[2][2] > 0.7) {
 					/* distance to surface */
@@ -722,7 +729,6 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 		/* check for timeout on FLOW topic */
 		if ((flow_valid || sonar_valid) && t > flow.timestamp + flow_topic_timeout) {
 			flow_valid = false;
-			sonar_valid = false;
 			warnx("FLOW timeout");
 			mavlink_log_info(mavlink_fd, "[inav] FLOW timeout");
 		}
@@ -757,6 +763,8 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 		bool use_gps_z = ref_inited && gps_valid && params.w_z_gps_p > MIN_VALID_W;
 		/* use flow if it's valid and (accurate or no GPS available) */
 		bool use_flow = flow_valid && (flow_accurate || !use_gps_xy);
+		/* use sonar for altitude if it has reached the minimum usable height */
+		bool use_sonar = sonar_valid && (sonar_avg >= params.sonar_zmin);
 
 		/* try to estimate position during some time after position sources lost */
 		if (use_gps_xy || use_flow) {
@@ -767,15 +775,22 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 
 		bool dist_bottom_valid = (t < sonar_valid_time + sonar_valid_timeout);
 
-		if (dist_bottom_valid) {
+		/* Correct surface offset when using only baro for altitude correction */
+		if (dist_bottom_valid && !use_sonar) {
 			/* surface distance prediction */
 			surface_offset += surface_offset_rate * dt;
 
 			/* surface distance correction */
 			if (sonar_valid) {
-				surface_offset_rate -= corr_sonar * 0.5f * params.w_z_sonar * params.w_z_sonar * dt;
-				surface_offset -= corr_sonar * params.w_z_sonar * dt;
+				surface_offset_rate += corr_sonar * 0.5f * params.w_z_sonar * params.w_z_sonar * dt;
+				surface_offset += corr_sonar * params.w_z_sonar * dt;
 			}
+
+		} else if (use_sonar) {
+			/* Reset surface offset when using sonar */
+			/* Dist from bottom should be the same as the altitude estimate */
+			surface_offset = 0.0f;
+			surface_offset_rate = 0.0f;
 		}
 
 		float w_xy_gps_p = params.w_xy_gps_p * w_gps_xy;
@@ -789,6 +804,11 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 		}
 
 		/* baro offset correction */
+		if (use_sonar && !landed) {
+			/* Correct baro offset considering we are using sonar estimate */
+			baro_offset = baro_avg + z_est[0];
+		}
+
 		if (use_gps_z) {
 			float offs_corr = corr_gps[2][0] * w_z_gps_p * dt;
 			baro_offset += offs_corr;
@@ -856,7 +876,14 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 		}
 
 		/* inertial filter correction for altitude */
-		inertial_filter_correct(corr_baro, dt, z_est, 0, params.w_z_baro);
+		if (use_sonar) {
+			/* prioritize sonar over baro for altitude when it is available */
+			inertial_filter_correct(corr_sonar, dt, z_est, 0, params.w_z_sonar);
+
+		} else {
+
+			inertial_filter_correct(corr_baro, dt, z_est, 0, params.w_z_baro);
+		}
 
 		if (use_gps_z) {
 			epv = fminf(epv, gps.epv_m);
@@ -938,6 +965,11 @@ int position_estimator_inav_thread_main(int argc, char *argv[])
 			/* reset xy velocity estimates when landed */
 			x_est[1] = 0.0f;
 			y_est[1] = 0.0f;
+
+			/* Reset baro offset and surface offset */
+			baro_offset = baro_avg;
+			surface_offset = 0.0f;
+			surface_offset_rate = 0.0f;
 
 		} else {
 			if (alt_disp2 < land_disp2 && thrust < params.land_thr) {
