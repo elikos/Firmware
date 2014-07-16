@@ -800,13 +800,15 @@ MulticopterPositionControl::task_main()
 						orb_copy(ORB_ID(vehicle_global_velocity_setpoint), _global_vel_sp_sub, &_global_vel_sp);
 					}
 
-					if (!_control_mode.flag_control_altitude_enabled && _control_mode.flag_control_climb_rate_enabled) {
-						_vel_sp(2) = _global_vel_sp.vz;
-					}
+					if (isfinite(_global_vel_sp.vx) && isfinite(_global_vel_sp.vy) && isfinite(_global_vel_sp.vz)) {
+						if (!_control_mode.flag_control_altitude_enabled && _control_mode.flag_control_climb_rate_enabled) {
+							_vel_sp(2) = _global_vel_sp.vz;
+						}
 
-					if (!_control_mode.flag_control_position_enabled && _control_mode.flag_control_velocity_enabled) {
-						_vel_sp(0) = _global_vel_sp.vx;
-						_vel_sp(1) = _global_vel_sp.vy;
+						if (!_control_mode.flag_control_position_enabled && _control_mode.flag_control_velocity_enabled) {
+							_vel_sp(0) = _global_vel_sp.vx;
+							_vel_sp(1) = _global_vel_sp.vy;
+						}
 					}
 				}
 
