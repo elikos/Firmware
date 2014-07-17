@@ -65,6 +65,7 @@ MODULES		+= modules/commander
 MODULES		+= modules/navigator
 MODULES		+= modules/mavlink
 MODULES		+= modules/gpio_led
+MODULES 	+= modules/flow_led
 
 #
 # Estimation modules (EKF/ SO3 / other filters)

@@ -67,7 +67,7 @@ __BEGIN_DECLS
 /**
  * Lowest minimum PWM in us
  */
-#define PWM_LOWEST_MIN 900
+#define PWM_LOWEST_MIN 1
 
 /**
  * Default minimum PWM in us
@@ -82,7 +82,7 @@ __BEGIN_DECLS
 /**
  * Highest maximum PWM in us
  */
-#define PWM_HIGHEST_MAX 2100
+#define PWM_HIGHEST_MAX 20000
 
 /**
  * Default maximum PWM in us
