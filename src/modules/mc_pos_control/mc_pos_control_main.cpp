@@ -713,7 +713,8 @@ MulticopterPositionControl::task_main()
 
 					if (offb_pos_sp_offs_norm > _params.offb_pos_sp_max) {
 						offb_pos_sp_offs /= offb_pos_sp_offs_norm;
-						_pos_sp = _pos + pos_sp_offs.emult(_params.offb_pos_sp_max);
+						_pos_sp(0) = _pos(0) + offb_pos_sp_offs(0) * _params.offb_pos_sp_max;
+						_pos_sp(1) = _pos(1) + offb_pos_sp_offs(1) * _params.offb_pos_sp_max;
 					}
 
 				} else {
