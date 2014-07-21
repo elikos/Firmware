@@ -754,18 +754,22 @@ MulticopterPositionControl::task_main()
 				}
 			}
 
-			/* fill local position setpoint */
-			_local_pos_sp.x = _pos_sp(0);
-			_local_pos_sp.y = _pos_sp(1);
-			_local_pos_sp.z = _pos_sp(2);
-			_local_pos_sp.yaw = _att_sp.yaw_body;
+			if (!_control_mode.flag_control_offboard_enabled) {
 
-			/* publish local position setpoint */
-			if (_local_pos_sp_pub > 0) {
-				orb_publish(ORB_ID(vehicle_local_position_setpoint), _local_pos_sp_pub, &_local_pos_sp);
+				/* fill local position setpoint */
+				_local_pos_sp.x = _pos_sp(0);
+				_local_pos_sp.y = _pos_sp(1);
+				_local_pos_sp.z = _pos_sp(2);
+				_local_pos_sp.yaw = _att_sp.yaw_body;
 
-			} else {
-				_local_pos_sp_pub = orb_advertise(ORB_ID(vehicle_local_position_setpoint), &_local_pos_sp);
+				/* publish local position setpoint */
+				if (_local_pos_sp_pub > 0) {
+					orb_publish(ORB_ID(vehicle_local_position_setpoint), _local_pos_sp_pub, &_local_pos_sp);
+
+				} else {
+					_local_pos_sp_pub = orb_advertise(ORB_ID(vehicle_local_position_setpoint), &_local_pos_sp);
+				}
+
 			}
 
 
