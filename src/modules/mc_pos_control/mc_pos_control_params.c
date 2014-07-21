@@ -208,3 +208,11 @@ PARAM_DEFINE_FLOAT(MPC_TILTMAX_LND, 15.0f);
  */
 PARAM_DEFINE_FLOAT(MPC_LAND_SPEED, 1.0f);
 
+/**
+ * Max offboard XY velocity
+ *
+ * @unit m/s
+ * @min 0.0
+ * @group Multicopter Position Control
+ */
+PARAM_DEFINE_FLOAT(MPC_OB_PSP_MAX, 1.0f);

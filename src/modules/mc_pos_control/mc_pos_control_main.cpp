@@ -154,6 +154,7 @@ private:
 		param_t tilt_max_air;
 		param_t land_speed;
 		param_t tilt_max_land;
+		param_t offb_pos_sp_max;
 	}		_params_handles;		/**< handles for interesting parameters */
 
 	struct {
@@ -162,6 +163,7 @@ private:
 		float tilt_max_air;
 		float land_speed;
 		float tilt_max_land;
+		float offb_pos_sp_max;
 
 		math::Vector<3> pos_p;
 		math::Vector<3> vel_p;
@@ -315,6 +317,7 @@ MulticopterPositionControl::MulticopterPositionControl() :
 	_params_handles.tilt_max_air	= param_find("MPC_TILTMAX_AIR");
 	_params_handles.land_speed	= param_find("MPC_LAND_SPEED");
 	_params_handles.tilt_max_land	= param_find("MPC_TILTMAX_LND");
+	_params_handles.offb_pos_sp_max	= param_find("MPC_OB_PSP_MAX");
 
 	/* fetch initial parameter values */
 	parameters_update(true);
@@ -364,6 +367,7 @@ MulticopterPositionControl::parameters_update(bool force)
 		param_get(_params_handles.land_speed, &_params.land_speed);
 		param_get(_params_handles.tilt_max_land, &_params.tilt_max_land);
 		_params.tilt_max_land = math::radians(_params.tilt_max_land);
+		param_get(_params_handles.offb_pos_sp_max, &_params.offb_pos_sp_max);
 
 		float v;
 		param_get(_params_handles.xy_p, &v);
@@ -696,6 +700,23 @@ MulticopterPositionControl::task_main()
 
 					_att_sp.yaw_body = _local_pos_sp.yaw;
 
+					/* Limit XY position setpoint offset */
+					math::Vector<3> offb_pos_sp_offs;
+					offb_pos_sp_offs.zero();
+
+					if (_control_mode.flag_control_position_enabled) {
+						offb_pos_sp_offs(0) = (_pos_sp(0) - _pos(0));
+						offb_pos_sp_offs(1) = (_pos_sp(1) - _pos(1));
+					}
+
+					float offb_pos_sp_offs_norm = offb_pos_sp_offs.length();
+
+					if (offb_pos_sp_offs_norm > _params.offb_pos_sp_max) {
+						offb_pos_sp_offs /= offb_pos_sp_offs_norm;
+						_pos_sp(0) = _pos(0) + offb_pos_sp_offs(0) * _params.offb_pos_sp_max;
+						_pos_sp(1) = _pos(1) + offb_pos_sp_offs(1) * _params.offb_pos_sp_max;
+					}
+
 				} else {
 					reset_pos_sp();
 					reset_alt_sp();
@@ -733,18 +754,22 @@ MulticopterPositionControl::task_main()
 				}
 			}
 
-			/* fill local position setpoint */
-			_local_pos_sp.x = _pos_sp(0);
-			_local_pos_sp.y = _pos_sp(1);
-			_local_pos_sp.z = _pos_sp(2);
-			_local_pos_sp.yaw = _att_sp.yaw_body;
+			if (!_control_mode.flag_control_offboard_enabled) {
 
-			/* publish local position setpoint */
-			if (_local_pos_sp_pub > 0) {
-				orb_publish(ORB_ID(vehicle_local_position_setpoint), _local_pos_sp_pub, &_local_pos_sp);
+				/* fill local position setpoint */
+				_local_pos_sp.x = _pos_sp(0);
+				_local_pos_sp.y = _pos_sp(1);
+				_local_pos_sp.z = _pos_sp(2);
+				_local_pos_sp.yaw = _att_sp.yaw_body;
 
-			} else {
-				_local_pos_sp_pub = orb_advertise(ORB_ID(vehicle_local_position_setpoint), &_local_pos_sp);
+				/* publish local position setpoint */
+				if (_local_pos_sp_pub > 0) {
+					orb_publish(ORB_ID(vehicle_local_position_setpoint), _local_pos_sp_pub, &_local_pos_sp);
+
+				} else {
+					_local_pos_sp_pub = orb_advertise(ORB_ID(vehicle_local_position_setpoint), &_local_pos_sp);
+				}
+
 			}
 
 
