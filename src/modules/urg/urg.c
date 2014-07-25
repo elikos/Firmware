@@ -43,23 +43,45 @@
 #include <stdbool.h>
 #include <fcntl.h>
 #include <string.h>
-#include <nuttx/config.h>
-#include <nuttx/sched.h>
-#include <sys/prctl.h>
 #include <termios.h>
 #include <errno.h>
 #include <math.h>
 #include <poll.h>
+#include <fcntl.h>
+#include <semaphore.h>
+
+#include <sys/types.h>
+#include <sys/prctl.h>
+
+#include <nuttx/config.h>
+#include <nuttx/sched.h>
+#include <nuttx/arch.h>
+#include <nuttx/wqueue.h>
+#include <nuttx/clock.h>
+
 #include <uORB/uORB.h>
 #include <uORB/topics/vehicle_local_position.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
 #include <uORB/topics/parameter_update.h>
+
 #include <mavlink/mavlink_log.h>
+
 #include <systemlib/systemlib.h>
 #include <systemlib/err.h>
+#include <systemlib/perf_counter.h>
+
 #include <drivers/drv_hrt.h>
+#include <drivers/device/device.h>
+#include <drivers/device/ringbuffer.h>
+#include <uORB/topics/subsystem_info.h>
 
 #include "urg_params.h"
+
+#define URG_CONVERSION_INTERVAL	83334
+#define URG_TAKE_RANGE_REG		'd'
+#define URG_MIN_DISTANCE		0.0f
+#define URG_MAX_DISTANCE		40.0f
+#define URG_DEFAULT_PORT		"/dev/ttyS2"
 
 __EXPORT int urg_main(int argc, char *argv[]);
 
@@ -180,6 +202,56 @@ int urg_thread_main(int argc, char *argv[]) {
 	int error_counter = 0;
 	int loop_counter = 0;
 	hrt_abstime t_prev = 0;		// Absolute time of previous iteration of main loop
+
+	/*
+	 * URG device initializations
+	 */
+
+	/* open fd */
+	int _fd = ::open(port, O_RDWR | O_NOCTTY | O_NONBLOCK);
+
+	if (_fd < 0) {
+		warnx("FAIL: laser fd");
+	}
+
+	/* tell it to stop auto-triggering */
+	char stop_auto = ' ';
+	(void)::write(_fd, &stop_auto, 1);
+	usleep(100);
+	(void)::write(_fd, &stop_auto, 1);
+
+	struct termios uart_config;
+
+	int termios_state;
+
+	/* fill the struct for the new configuration */
+	tcgetattr(_fd, &uart_config);
+
+	/* clear ONLCR flag (which appends a CR for every LF) */
+	uart_config.c_oflag &= ~ONLCR;
+	/* no parity, one stop bit */
+	uart_config.c_cflag &= ~(CSTOPB | PARENB);
+
+	unsigned speed = B9600;
+
+	/* set baud rate */
+	if ((termios_state = cfsetispeed(&uart_config, speed)) < 0) {
+		warnx("ERR CFG: %d ISPD", termios_state);
+	}
+
+	if ((termios_state = cfsetospeed(&uart_config, speed)) < 0) {
+		warnx("ERR CFG: %d OSPD\n", termios_state);
+	}
+
+	if ((termios_state = tcsetattr(_fd, TCSANOW, &uart_config)) < 0) {
+		warnx("ERR baud %d ATTR", termios_state);
+	}
+
+	// disable debug() calls
+	_debug_enabled = false;
+
+	// work_cancel in the dtor will explode if we don't do this...
+	memset(&_work, 0, sizeof(_work));
 
 	while (!thread_should_exit) {
 
