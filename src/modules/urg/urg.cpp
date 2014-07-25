@@ -194,9 +194,9 @@ int urg_thread_main(int argc, char *argv[]) {
 	mavlink_log_info(mavlink_fd, "[LED] started");
 
 	/* Polling fds */
-	struct pollfd fds[] = {
-		{ .fd = local_pos_sub,   .events = POLLIN },
-	};
+	struct pollfd fds[1];
+	fds[0].fd = local_pos_sub;
+	fds[0].events = POLLIN;
 
 	/* Variable initializations */
 	int error_counter = 0;
@@ -207,8 +207,29 @@ int urg_thread_main(int argc, char *argv[]) {
 	 * URG device initializations
 	 */
 
+	/* Device driver class variables (private) */
+	float _min_distance;
+	float _max_distance;
+	work_s _work;
+	RingBuffer *_reports;
+	bool _sensor_ok;
+	int _measure_ticks;
+	bool _collect_phase;
+	int _fd;
+	char _linebuf[10];
+	unsigned _linebuf_index;
+	hrt_abstime _last_read;
+
+	orb_advert_t _range_finder_topic;
+
+	unsigned _consecutive_fail_count;
+
+	perf_counter_t _sample_perf;
+	perf_counter_t _comms_errors;
+	perf_counter_t _buffer_overflows;
+
 	/* open fd */
-	int _fd = ::open(port, O_RDWR | O_NOCTTY | O_NONBLOCK);
+	int _fd = ::open(URG_DEFAULT_PORT, O_RDWR | O_NOCTTY | O_NONBLOCK);
 
 	if (_fd < 0) {
 		warnx("FAIL: laser fd");
