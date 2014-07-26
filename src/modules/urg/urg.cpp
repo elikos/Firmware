@@ -83,7 +83,7 @@
 #define URG_MAX_DISTANCE		40.0f
 #define URG_DEFAULT_PORT		"/dev/ttyS2"
 
-__EXPORT int urg_main(int argc, char *argv[]);
+extern "C" __EXPORT int urg_main(int argc, char *argv[]);
 
 int urg_thread_main(int argc, char *argv[]);
 
@@ -161,177 +161,178 @@ int urg_main(int argc, char *argv[])
 
 int urg_thread_main(int argc, char *argv[]) {
 
-	thread_running = true;
+	// thread_running = true;
 
-	/* Initialize structs */
-	struct local_position_s local_pos;
-	memset(&local_pos, 0, sizeof(local_pos));
-	struct local_position_setpoint_s local_pos_sp;
-	memset(&local_pos_sp, 0, sizeof(local_pos_sp));
+	// /* Initialize structs */
+	// struct vehicle_local_position_s local_pos;
+	// memset(&local_pos, 0, sizeof(local_pos));
+	// struct vehicle_local_position_setpoint_s local_pos_sp;
+	// memset(&local_pos_sp, 0, sizeof(local_pos_sp));
 
-	/* Subscribe to uORB topics */
-	int local_pos_sub = orb_subscribe(ORB_ID(vehicle_local_position));
-	int parameter_update_sub = orb_subscribe(ORB_ID(parameter_update));
+	// /* Subscribe to uORB topics */
+	// int local_pos_sub = orb_subscribe(ORB_ID(vehicle_local_position));
+	// int parameter_update_sub = orb_subscribe(ORB_ID(parameter_update));
 
-	/* Advertise on actuators topic */
-	orb_advert_t local_pos_sp_pub = orb_advertise(ORB_ID(vehicle_local_position_setpoint), &local_pos_sp);
+	// /* Advertise on actuators topic */
+	// orb_advert_t local_pos_sp_pub = orb_advertise(ORB_ID(vehicle_local_position_setpoint), &local_pos_sp);
 
-	/* Initialize parameter handles */
-	struct urg_params params;
-	struct urg_param_handles urg_param_handles;
-	parameters_init(&urg_param_handles);
+	// /* Initialize parameter handles */
+	// struct urg_params params;
+	// struct urg_param_handles urg_param_handles;
+	// parameters_init(&urg_param_handles);
 
-	/* First parameter read */
-	struct parameter_update_s param_update;
-	orb_copy(ORB_ID(parameter_update), parameter_update_sub, &param_update);
+	// /* First parameter read */
+	// struct parameter_update_s param_update;
+	// orb_copy(ORB_ID(parameter_update), parameter_update_sub, &param_update);
 
-	/* First parameter update */
-	parameters_update(&urg_param_handles, &params);
+	// /* First parameter update */
+	// parameters_update(&urg_param_handles, &params);
 
-	/* Initialize MAVLink fd for output to QGC */
-	int mavlink_fd;
-	mavlink_fd = open(MAVLINK_LOG_DEVICE, 0);
-	mavlink_log_info(mavlink_fd, "[LED] started");
+	// /* Initialize MAVLink fd for output to QGC */
+	// int mavlink_fd;
+	// mavlink_fd = open(MAVLINK_LOG_DEVICE, 0);
+	// mavlink_log_info(mavlink_fd, "[LED] started");
 
-	/* Polling fds */
-	struct pollfd fds[1];
-	fds[0].fd = local_pos_sub;
-	fds[0].events = POLLIN;
+	// /* Polling fds */
+	// struct pollfd fds[1];
+	// fds[0].fd = local_pos_sub;
+	// fds[0].events = POLLIN;
 
-	/* Variable initializations */
-	int error_counter = 0;
-	int loop_counter = 0;
-	hrt_abstime t_prev = 0;		// Absolute time of previous iteration of main loop
+	// /* Variable initializations */
+	// int error_counter = 0;
+	// int loop_counter = 0;
+	// hrt_abstime t_prev = 0;		// Absolute time of previous iteration of main loop
 
-	/*
-	 * URG device initializations
-	 */
+	// /*
+	//  * URG device initializations
+	//  */
 
-	/* Device driver class variables (private) */
-	float _min_distance;
-	float _max_distance;
-	work_s _work;
-	RingBuffer *_reports;
-	bool _sensor_ok;
-	int _measure_ticks;
-	bool _collect_phase;
-	int _fd;
-	char _linebuf[10];
-	unsigned _linebuf_index;
-	hrt_abstime _last_read;
+	// /* Device driver class variables (private) */
+	// float _min_distance;
+	// float _max_distance;
+	// work_s _work;
+	// RingBuffer *_reports;
+	// bool _sensor_ok;
+	// int _measure_ticks;
+	// bool _collect_phase;
+	// int _fd;
+	// char _linebuf[10];
+	// unsigned _linebuf_index;
+	// hrt_abstime _last_read;
 
-	orb_advert_t _range_finder_topic;
+	// orb_advert_t _range_finder_topic;
 
-	unsigned _consecutive_fail_count;
+	// unsigned _consecutive_fail_count;
 
-	perf_counter_t _sample_perf;
-	perf_counter_t _comms_errors;
-	perf_counter_t _buffer_overflows;
+	// perf_counter_t _sample_perf;
+	// perf_counter_t _comms_errors;
+	// perf_counter_t _buffer_overflows;
 
-	/* open fd */
-	int _fd = ::open(URG_DEFAULT_PORT, O_RDWR | O_NOCTTY | O_NONBLOCK);
+	// /* open fd */
+	// int _fd = ::open(URG_DEFAULT_PORT, O_RDWR | O_NOCTTY | O_NONBLOCK);
 
-	if (_fd < 0) {
-		warnx("FAIL: laser fd");
-	}
+	// if (_fd < 0) {
+	// 	warnx("FAIL: laser fd");
+	// }
 
-	/* tell it to stop auto-triggering */
-	char stop_auto = ' ';
-	(void)::write(_fd, &stop_auto, 1);
-	usleep(100);
-	(void)::write(_fd, &stop_auto, 1);
+	// /* tell it to stop auto-triggering */
+	// char stop_auto = ' ';
+	// (void)::write(_fd, &stop_auto, 1);
+	// usleep(100);
+	// (void)::write(_fd, &stop_auto, 1);
 
-	struct termios uart_config;
+	// struct termios uart_config;
 
-	int termios_state;
+	// int termios_state;
 
-	/* fill the struct for the new configuration */
-	tcgetattr(_fd, &uart_config);
+	// /* fill the struct for the new configuration */
+	// tcgetattr(_fd, &uart_config);
 
-	/* clear ONLCR flag (which appends a CR for every LF) */
-	uart_config.c_oflag &= ~ONLCR;
-	/* no parity, one stop bit */
-	uart_config.c_cflag &= ~(CSTOPB | PARENB);
+	// /* clear ONLCR flag (which appends a CR for every LF) */
+	// uart_config.c_oflag &= ~ONLCR;
+	// /* no parity, one stop bit */
+	// uart_config.c_cflag &= ~(CSTOPB | PARENB);
 
-	unsigned speed = B9600;
+	// unsigned speed = B9600;
 
-	/* set baud rate */
-	if ((termios_state = cfsetispeed(&uart_config, speed)) < 0) {
-		warnx("ERR CFG: %d ISPD", termios_state);
-	}
+	// /* set baud rate */
+	// if ((termios_state = cfsetispeed(&uart_config, speed)) < 0) {
+	// 	warnx("ERR CFG: %d ISPD", termios_state);
+	// }
 
-	if ((termios_state = cfsetospeed(&uart_config, speed)) < 0) {
-		warnx("ERR CFG: %d OSPD\n", termios_state);
-	}
+	// if ((termios_state = cfsetospeed(&uart_config, speed)) < 0) {
+	// 	warnx("ERR CFG: %d OSPD\n", termios_state);
+	// }
 
-	if ((termios_state = tcsetattr(_fd, TCSANOW, &uart_config)) < 0) {
-		warnx("ERR baud %d ATTR", termios_state);
-	}
+	// if ((termios_state = tcsetattr(_fd, TCSANOW, &uart_config)) < 0) {
+	// 	warnx("ERR baud %d ATTR", termios_state);
+	// }
 
-	// disable debug() calls
-	_debug_enabled = false;
+	// // disable debug() calls
+	// _debug_enabled = false;
 
-	// work_cancel in the dtor will explode if we don't do this...
-	memset(&_work, 0, sizeof(_work));
+	// // work_cancel in the dtor will explode if we don't do this...
+	// memset(&_work, 0, sizeof(_work));
 
-	while (!thread_should_exit) {
+	// while (!thread_should_exit) {
 
-		/* Wait for update for 1000 ms */
-		int poll_result = poll(fds, 1, 1000);
-		hrt_abstime t = hrt_absolute_time();
+	// 	/* Wait for update for 1000 ms */
+	// 	int poll_result = poll(fds, 1, 1000);
+	// 	hrt_abstime t = hrt_absolute_time();
 
-		/* Calculate time difference since last iteration of loop */
-		float dt = t_prev > 0 ? (t - t_prev) / 1000000.0f : 0.0f;
-		dt = fmaxf(fminf(0.05, dt), 0.005);		// Constrain dt from 5 to 50 ms
-		t_prev = t;
+	// 	/* Calculate time difference since last iteration of loop */
+	// 	float dt = t_prev > 0 ? (t - t_prev) / 1000000.0f : 0.0f;
+	// 	dt = fmaxf(fminf(0.05, dt), 0.005);		// Constrain dt from 5 to 50 ms
+	// 	t_prev = t;
  
-		if (poll_result == 0) {
-			/* No new flow data */
-			if (verbose_mode) {
-				printf("[urg] Got no data within a second. \n");
-			}
-		} else if (poll_result < 0) {
-			/* ERROR */
-			if (error_counter < 10 || error_counter % 50 == 0) {
-				/* Use error counter to prevent flooding */
-				if (verbose_mode) {
-					printf("[urg] ERROR return value from poll(): %d\n", poll_result);
-				}
-			}
-			error_counter++;
+	// 	if (poll_result == 0) {
+	// 		/* No new flow data */
+	// 		if (verbose_mode) {
+	// 			printf("[urg] Got no data within a second. \n");
+	// 		}
+	// 	} else if (poll_result < 0) {
+	// 		/* ERROR */
+	// 		if (error_counter < 10 || error_counter % 50 == 0) {
+	// 			/* Use error counter to prevent flooding */
+	// 			if (verbose_mode) {
+	// 				printf("[urg] ERROR return value from poll(): %d\n", poll_result);
+	// 			}
+	// 		}
+	// 		error_counter++;
 
-		} else {
+	// 	} else {
 
-			/* Parameter update */
-			bool updated;
-			orb_check(parameter_update_sub, &updated);
-			if (updated) {
-				struct parameter_update_s update;
-				orb_copy(ORB_ID(parameter_update), parameter_update_sub, &update);
-				parameters_update(&urg_param_handles, &params);
-			}
+	// 		/* Parameter update */
+	// 		bool updated;
+	// 		orb_check(parameter_update_sub, &updated);
+	// 		if (updated) {
+	// 			struct parameter_update_s update;
+	// 			orb_copy(ORB_ID(parameter_update), parameter_update_sub, &update);
+	// 			parameters_update(&urg_param_handles, &params);
+	// 		}
  
-			/* Poll flow data */
-			if (fds[0].revents & POLLIN) {
+	// 		/* Poll flow data */
+	// 		if (fds[0].revents & POLLIN) {
 
-				/* Copy data to local buffer */
-				orb_copy(ORB_ID(vehicle_local_position), local_pos_sub, &local_pos);
+	// 			/* Copy data to local buffer */
+	// 			orb_copy(ORB_ID(vehicle_local_position), local_pos_sub, &local_pos);
 
-				/* Do stuff */
+	// 			/* Do stuff */
 
-			}
-		}
+	// 		}
+	// 	}
 
-		/* Copy controls and whatever to struct */
-		//local_pos_sp.x = something;
+	// 	/* Copy controls and whatever to struct */
+	// 	//local_pos_sp.x = something;
 
-		/* Publish output */
-		orb_publish(ORB_ID(vehicle_local_position_setpoint), local_pos_sp_pub, &local_pos_sp);
+	// 	/* Publish output */
+	// 	orb_publish(ORB_ID(vehicle_local_position_setpoint), local_pos_sp_pub, &local_pos_sp);
 
-		loop_counter++;
+	// 	loop_counter++;
 
-	}
-	warnx("stopped");
-	thread_running = false;
+	// }
+	
+	// warnx("stopped");
+	// thread_running = false;
 	return 0;
 }

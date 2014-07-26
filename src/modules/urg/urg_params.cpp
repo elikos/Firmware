@@ -33,7 +33,7 @@
  ****************************************************************************/
 
 /*
- * @file flow_led_params.c
+ * @file urg_params.c
  *
  * Parameters for Hokuyo URG-04LX lidar.
  */

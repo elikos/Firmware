@@ -3,7 +3,7 @@
  * Hokuyo URG-04LX device driver.
  */
 
-#include "URG04LX.h"
+#include "urg04lx.h"
 
 URG04LX::URG04LX(int fd)
 {
