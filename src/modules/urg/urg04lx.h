@@ -1,7 +1,6 @@
 /****************************************************************************
  *
  *   Copyright (C) 2012 PX4 Development Team. All rights reserved.
- *   Author: @author Andre Phu-Van Nguyen <andre-phu-van.nguyen@polymtl.ca>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -35,14 +34,51 @@
 /**
  * @file urg04lx.h
  * Hokuyo URG-04LX device driver.
+ * @author Andre Phu-Van Nguyen <andre-phu-van.nguyen@polymtl.ca>
+ * @remarks Based off the official Hokuyo QRK_URG_DRIVER
  */
 
 #pragma once
 
 class URG04LX {
 public:
+	typedef enum {
+		URG_COMMUNICATION_3_BYTE,
+		URG_COMMUNICATION_2_BYTE,
+	} urg_range_data_byte_t;
+
+	/**
+	 * @brief URG04LX constructor
+	 * 
+	 * @param fd An opened file descriptor to the LIDAR
+	 */
 	URG04LX(int fd);
 	virtual ~URG04LX(void);
+
+	bool getVersion();
+
+	/**
+	 * @brief Scan a step range
+	 * 
+	 * @param comRange 2 or 3 byte encoding
+	 * @param startStep Starting step minimum 10
+	 * @param endStep Last step maximum 750
+	 * @param clusterCount Between 0 and 99, a cluster allows us to get the
+	 * 		closest measurement within a defined cluster. e.g. if you cluster
+	 * 		3 points 233 256 156, URG will return 156.
+	 * @param scanInterval If you are requesting multiple scans you can skip some
+	 * 		at certain intervals.
+	 * @param numScans Number of scans requested, if numScans == 0 the data is
+	 * 		supplied intil quit is called.
+	 * @return returns if the command was succesfully sent
+	 */
+	bool scanRange(urg_range_data_byte_t comRange, 
+		int startStep, int endStep, int clusterCount, int scanInterval,
+		int numScans);
+
+
 private:
+	URG04LX(const URG04LX& rhs);
+	URG04LX& operator = (const URG04LX& rhs);
 	int _fd;
 };
