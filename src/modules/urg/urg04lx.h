@@ -37,12 +37,12 @@
  * Hokuyo URG-04LX device driver.
  */
 
-#include <drivers/device/ringbuffer.h>
-
 #pragma once
 
-class urg04lx {
-	const unsigned RING_SIZE = 256;
-	RingBuffer ringBuf(RING_SIZE, sizeof(uint8_t));
-
+class URG04LX {
+public:
+	URG04LX(int fd);
+	virtual ~URG04LX(void);
+private:
+	int _fd;
 };
