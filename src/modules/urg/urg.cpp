@@ -76,12 +76,13 @@
 #include <uORB/topics/subsystem_info.h>
 
 #include "urg_params.h"
+#include "scip.h"
 
 #define URG_CONVERSION_INTERVAL	83334
 #define URG_TAKE_RANGE_REG		'd'
 #define URG_MIN_DISTANCE		0.0f
 #define URG_MAX_DISTANCE		40.0f
-#define URG_DEFAULT_PORT		"/dev/ttyS2"
+#define URG_DEFAULT_PORT		"/dev/ttyS6"
 
 extern "C" __EXPORT int urg_main(int argc, char *argv[]);
 
@@ -160,6 +161,73 @@ int urg_main(int argc, char *argv[])
 }
 
 int urg_thread_main(int argc, char *argv[]) {
+
+	 /* open fd */
+
+	 int _fd = ::open(URG_DEFAULT_PORT, O_RDWR | O_NOCTTY);// | O_NONBLOCK);
+
+	 if (_fd < 0) {
+		warnx("FAIL: laser fd");
+	 }
+
+	 struct termios uart_config;
+
+	 int termios_state;
+
+	 /* fill the struct for the new configuration */
+	 tcgetattr(_fd, &uart_config);
+
+	 /* clear ONLCR flag (which appends a CR for every LF) */
+	 uart_config.c_oflag &= ~ONLCR;
+	 /* no parity, one stop bit */
+	 uart_config.c_cflag &= ~(CSTOPB | PARENB | CSIZE);
+	 uart_config.c_cflag |= CS8;
+	 //uart_config.c_lflag &= ~(ICANON | ECHO | ISIG | IEXTEN);
+
+	 unsigned speed = B19200;
+
+	 /* set baud rate */
+	 if ((termios_state = cfsetispeed(&uart_config, speed)) < 0) {
+		 warnx("ERR CFG: %d ISPD", termios_state);
+	 }
+
+	 if ((termios_state = cfsetospeed(&uart_config, speed)) < 0) {
+		 warnx("ERR CFG: %d OSPD\n", termios_state);
+	 }
+
+	 if ((termios_state = tcsetattr(_fd, TCSANOW, &uart_config)) < 0) {
+		 warnx("ERR baud %d ATTR", termios_state);
+	 }
+
+//	 printf("The fd is %d\nuart_config:\nInput:%d\nOutput%d\nControl:%d\nLocal:%d\n",
+//			 _fd, uart_config.c_iflag, uart_config.c_oflag, uart_config.c_cflag, uart_config.c_lflag);
+
+	 usleep(1000);
+
+	 ::write(_fd, "SCIP2.0\n", 8);
+	 usleep(20000);
+
+	 ::write(_fd, "VV\n", 3);
+	 usleep(40000);
+
+	 char buf[100];
+	 memset(buf, 0, 100);
+
+	 int n = read(_fd, &buf[0], sizeof(buf));
+
+	 printf("Value of n:%d\n", n);
+
+	 if(n == -1) {
+	     printf("Error on read()! %s\n", strerror(errno));
+	 }
+
+	 printf("Read data:\n");
+
+	 for(int i = 0; i<100; i++) {
+		 printf("Byte%d:%X\n", i + 1, buf[i]);
+	 }
+
+	 ::close(_fd);
 
 	// thread_running = true;
 
