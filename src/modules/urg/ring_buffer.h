@@ -12,9 +12,9 @@ typedef struct
 /**
  * @brief Initialize the ring buffer
  * 
- * @param ring pointer to a ring buffer
- * @param buffer a buffer
- * @param shift_length 
+ * @param ring 			Pointer to a ring buffer
+ * @param buffer 		A buffer
+ * @param shift_length 	Will become size of buffer, 
  */
 extern void ring_initialize(ring_buffer_t *ring, char *buffer, const int shift_length);
 

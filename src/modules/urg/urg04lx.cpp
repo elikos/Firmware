@@ -9,7 +9,7 @@
 
 #include "urg04lx.h"
 #include "scip.h"
-
+#include "ring_buffer.h"
 
 
 typedef enum {
@@ -42,6 +42,13 @@ enum {
 URG04LX::URG04LX(int fd)
 {
 	_fd = fd;
+	char* buf = new char[64];
+	ring_initialize(&_rbuf, buf, 6);
+}
+
+URG04LX::~URG04LX()
+{
+	delete _rbuf.buffer;
 }
 
 bool URG04LX::getVersion()
@@ -73,4 +80,20 @@ bool URG04LX::scanRange(urg_range_data_byte_t comRange,
 		return false;
 	else
 		return true;
+}
+
+int URG04LX::getRangeResponse(int* step)
+{
+	return 0;
+}
+
+bool URG04LX::recvByte()
+{
+	char c;
+	if(::read(_fd, &c, 1) > 0){
+		ring_write(&_rbuf, &c, 1);
+		return true;
+	} else {
+		return false;
+	}
 }

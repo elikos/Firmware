@@ -39,6 +39,7 @@
  */
 
 #pragma once
+#include "ring_buffer.h"
 
 class URG04LX {
 public:
@@ -76,9 +77,12 @@ public:
 		int startStep, int endStep, int clusterCount, int scanInterval,
 		int numScans);
 
-
+	int getRangeResponse(int* step);
 private:
 	URG04LX(const URG04LX& rhs);
 	URG04LX& operator = (const URG04LX& rhs);
 	int _fd;
+	ring_buffer_t _rbuf;
+
+	bool recvByte();
 };
