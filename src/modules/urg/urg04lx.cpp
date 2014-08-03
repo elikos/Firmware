@@ -7,10 +7,10 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#include "urg04lx.h"
-#include "scip.h"
 #include "ring_buffer.h"
+#include "scip.h"
 
+#include "urg04lx.h"
 
 typedef enum {
 	URG_DISTANCE,
@@ -42,7 +42,7 @@ enum {
 URG04LX::URG04LX(int fd)
 {
 	_fd = fd;
-	char* buf = new char[64];
+	char* buf = new char[256];
 	ring_initialize(&_rbuf, buf, 6);
 }
 
@@ -82,9 +82,36 @@ bool URG04LX::scanRange(urg_range_data_byte_t comRange,
 		return true;
 }
 
-int URG04LX::getRangeResponse(int* step)
+bool verifyMeasurementResponse(urg_measurement_resp_t* response)
 {
-	return 0;
+	//todo add more checks
+	if(response->lf0 == '\n')
+		return true;
+	else
+		return false;
+}
+
+int URG04LX::getRangeResponse(int* step, int* err)
+{
+	//see page 5 of http://www.hokuyo-aut.jp/02sensor/07scanner/download/pdf/URG_SCIP20.pdf
+	if(!scanRange(URG_COMMUNICATION_3_BYTE, 44, 725, 99, 0, 1)){
+		return -1;
+	}
+
+	const int EXPECTED_LF_COUNT = 6;
+	int lfCount = 0;
+	char buf = 8;
+	ring_clear(&_rbuf);	//suboptimal... oh well
+	while(lfCount < EXPECTED_LF_COUNT){
+		if(read(_fd, &buf, 1) > 0){
+			if(buf == '\n')
+				lfCount += 1;
+			ring_write(&_rbuf, &buf, 1);
+		}
+	}
+
+	//reception end, time to parse
+	char c;
 }
 
 bool URG04LX::recvByte()

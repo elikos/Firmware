@@ -40,11 +40,11 @@
 
 #include <systemlib/param/param.h>
 
-struct flow_led_params {
+struct urg_params {
 	//float param_name;
 };
 
-struct flow_led_param_handles {
+struct urg_param_handles {
 	//param_t param_name;
 	};
 
