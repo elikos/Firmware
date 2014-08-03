@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (C) 2012 PX4 Development Team. All rights reserved.
+ *   Copyright (C) 2014 PX4 Development Team. All rights reserved.
  *   Author: @author Antonio Sanniravong <antonio.sanniravong@polymtl.ca>
  *
  * Redistribution and use in source and binary forms, with or without
