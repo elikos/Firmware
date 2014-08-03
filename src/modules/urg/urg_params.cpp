@@ -42,14 +42,14 @@
 
 //PARAM_DEFINE_FLOAT(PARAM_NAME, 0.5f);
 
-int parameters_init(struct flow_led_param_handles *h)
+int parameters_init(struct urg_param_handles *h)
 {
 	//h->param_name = param_find("PARAM_NAME");
 
 	return OK;
 }
 
-int parameters_update(const struct flow_led_param_handles *h, struct flow_led_params *p)
+int parameters_update(const struct urg_param_handles *h, struct urg_params *p)
 {
 	//param_get(h->param_name, &(p->param_name));
 

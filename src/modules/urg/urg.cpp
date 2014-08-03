@@ -77,6 +77,7 @@
 
 #include "urg_params.h"
 #include "scip.h"
+#include "urg04lx.h"
 
 #define URG_CONVERSION_INTERVAL	83334
 #define URG_TAKE_RANGE_REG		'd'
@@ -265,10 +266,18 @@ int urg_thread_main(int argc, char *argv[]) {
 		}
 	}
 
+	//Create URG object
+	URG04LX laser(_fd);
+
 	while (!thread_should_exit) {
 
 		/* Read UART buffer & parse messages */
 		// TODO: Andre's magic
+		//Antonio, use this for now, it will always return 0 but should at least
+		//compile for you to keep working
+		int step;
+		int err = 0;
+		int closestPoint = laser.getRangeResponse(&step, &err);
 
 		/* Wait for update for 1000 ms */
 		int poll_result = poll(fds, 1, 1000);
