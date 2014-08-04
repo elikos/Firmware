@@ -24,7 +24,7 @@ EXTERN_C_BEGIN
  * @brief Initialize the ring buffer
  * 
  * @param ring 			Pointer to a ring buffer
- * @param buffer 		A buffer
+ * @param buffer 	A buffer
  * @param shift_length 	Will become size of buffer, 
  */
 void ring_initialize(ring_buffer_t *ring, char *buffer, const int shift_length);

@@ -77,7 +77,7 @@ public:
 		int startStep, int endStep, int clusterCount, int scanInterval,
 		int numScans);
 
-	int getRangeResponse(int* step, int* err);
+	int* getRangeResponse(int* step, int* err);
 private:
 	URG04LX(const URG04LX& rhs);
 	URG04LX& operator = (const URG04LX& rhs);
