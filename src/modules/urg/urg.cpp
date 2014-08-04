@@ -63,6 +63,7 @@
 #include <uORB/topics/vehicle_local_position.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
 #include <uORB/topics/parameter_update.h>
+#include <uORB/topics/obstacle_detection.h>
 
 #include <mavlink/mavlink_log.h>
 
