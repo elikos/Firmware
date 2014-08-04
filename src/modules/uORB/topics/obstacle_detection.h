@@ -63,6 +63,10 @@ struct obstacle_detection_s {
 	uint64_t timestamp; /**< in microseconds since system start, is set whenever the writing thread stores new data */
 	bool obstacle_detected;		/* True if lidar detects nearby object */
 
+	float x_sp;
+	float y_sp;
+	float z_sp;
+
 };
 
 /**

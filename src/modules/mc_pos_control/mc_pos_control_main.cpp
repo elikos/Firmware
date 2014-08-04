@@ -67,6 +67,7 @@
 #include <uORB/topics/position_setpoint_triplet.h>
 #include <uORB/topics/vehicle_global_velocity_setpoint.h>
 #include <uORB/topics/vehicle_local_position_setpoint.h>
+#include <uORB/topics/obstacle_detection.h>
 #include <systemlib/param/param.h>
 #include <systemlib/err.h>
 #include <systemlib/systemlib.h>
@@ -120,6 +121,7 @@ private:
 	int		_pos_sp_triplet_sub;	/**< position setpoint triplet */
 	int 	_local_pos_sp_sub;		/**< offboard local position setpoint */
 	int 	_global_vel_sp_sub;		/**< offboard global velocity setpoint */
+	int		_obstacle_detection_sub;/**< obstacle detection mode */
 
 	orb_advert_t	_att_sp_pub;			/**< attitude setpoint publication */
 	orb_advert_t	_local_pos_sp_pub;		/**< vehicle local position setpoint publication */
@@ -134,6 +136,7 @@ private:
 	struct position_setpoint_triplet_s		_pos_sp_triplet;	/**< vehicle global position setpoint triplet */
 	struct vehicle_local_position_setpoint_s	_local_pos_sp;		/**< vehicle local position setpoint */
 	struct vehicle_global_velocity_setpoint_s	_global_vel_sp;	/**< vehicle global velocity setpoint */
+	struct obstacle_detection_s			_obstacle_detection		/**< obstacle detection */
 		
 
 	struct {
@@ -260,6 +263,7 @@ MulticopterPositionControl::MulticopterPositionControl() :
 	_local_pos_sub(-1),
 	_global_vel_sp_sub(-1),
 	_pos_sp_triplet_sub(-1),
+	_obstacle_detection_sub(-1),
 
 /* publications */
 	_att_sp_pub(-1),
@@ -281,6 +285,7 @@ MulticopterPositionControl::MulticopterPositionControl() :
 	memset(&_pos_sp_triplet, 0, sizeof(_pos_sp_triplet));
 	memset(&_local_pos_sp, 0, sizeof(_local_pos_sp));
 	memset(&_global_vel_sp, 0, sizeof(_global_vel_sp));
+	memset(&_obstacle_detection, 0, sizeof(_obstacle_detection));
 
 	memset(&_ref_pos, 0, sizeof(_ref_pos));
 
@@ -443,6 +448,12 @@ MulticopterPositionControl::poll_subscriptions()
 	if (updated) {
 		orb_copy(ORB_ID(vehicle_local_position), _local_pos_sub, &_local_pos);
 	}
+
+	orb_check(_obstacle_detection_sub, &updated);
+
+	if (updated) {
+		orb_copy(ORB_ID(obstacle_detection), _obstacle_detection_sub, &_obstacle_detection);
+	}
 }
 
 float
@@ -534,6 +545,7 @@ MulticopterPositionControl::task_main()
 	_global_vel_sp_sub = orb_subscribe(ORB_ID(vehicle_global_velocity_setpoint));
 	_pos_sp_triplet_sub = orb_subscribe(ORB_ID(position_setpoint_triplet));
 	_local_pos_sp_sub = orb_subscribe(ORB_ID(vehicle_local_position_setpoint));
+	_obstacle_detection_sub = orb_subscribe(ORB_ID(obstacle_detection));
 
 	parameters_update(true);
 
@@ -673,32 +685,52 @@ MulticopterPositionControl::task_main()
 			} else if (_control_mode.flag_control_offboard_enabled) {
 				/* Offboard control */
 				bool updated;
-				orb_check(_local_pos_sp_sub, &updated);
+				orb_check(_obstacle_detection_sub, &updated);
 
 				if (updated) {
-					orb_copy(ORB_ID(vehicle_local_position_setpoint), _local_pos_sp_sub, &_local_pos_sp);
+					orb_copy(ORB_ID(obstacle_detection), _obstacle_detection_sub, &_obstacle_detection);
 				}
 
-				if (isfinite(_local_pos_sp.x) && isfinite(_local_pos_sp.y) && isfinite(_local_pos_sp.z) && isfinite(_local_pos_sp.yaw)) {
-					/* If manual control overides offboard, cancel the offboard setpoint and stay at current position */
-					_reset_pos_sp = true;
-					_reset_alt_sp = true;
+				if(!_obstacle_detection.obstacle_detected) {
 
-					/* Make sure position control is selected i.e. not only velocity control */
-					if (_control_mode.flag_control_position_enabled) {
-						_pos_sp(0) = _local_pos_sp.x;
-						_pos_sp(1) = _local_pos_sp.y;
+					orb_check(_local_pos_sp_sub, &updated);
+
+					if (updated) {
+						orb_copy(ORB_ID(vehicle_local_position_setpoint), _local_pos_sp_sub, &_local_pos_sp);
 					}
 
-					if (_control_mode.flag_control_altitude_enabled) {
-						_pos_sp(2) = _local_pos_sp.z;
+					if (isfinite(_local_pos_sp.x) && isfinite(_local_pos_sp.y) && isfinite(_local_pos_sp.z) && isfinite(_local_pos_sp.yaw)) {
+						/* If manual control overides offboard, cancel the offboard setpoint and stay at current position */
+						_reset_pos_sp = true;
+						_reset_alt_sp = true;
+
+						/* Make sure position control is selected i.e. not only velocity control */
+						if (_control_mode.flag_control_position_enabled) {
+							_pos_sp(0) = _local_pos_sp.x;
+							_pos_sp(1) = _local_pos_sp.y;
+						}
+
+						if (_control_mode.flag_control_altitude_enabled) {
+							_pos_sp(2) = _local_pos_sp.z;
+						}
+
+						_att_sp.yaw_body = _local_pos_sp.yaw;
+
+					} else {
+						reset_pos_sp();
+						reset_alt_sp();
 					}
-
-					_att_sp.yaw_body = _local_pos_sp.yaw;
-
 				} else {
-					reset_pos_sp();
-					reset_alt_sp();
+					/* Obstacle detected, use obstacle detection avoidance setpoint */
+
+					if (_control_mode.flag_control_position_enabled) {
+						if (isfinite(_obstacle_detection.x_sp) && isfinite(_obstacle_detection.y_sp) && isfinite(_obstacle_detection.z_sp)) {
+							_pos_sp(0) = _obstacle_detection.x_sp;
+							_pos_sp(1) = _obstacle_detection.y_sp;
+							_pos_sp(2) = _obstacle_detection.z_sp;
+						}
+					}
+
 				}
 			
 			} else {

@@ -85,6 +85,7 @@
 #define URG_MIN_DISTANCE		0.0f
 #define URG_MAX_DISTANCE		40.0f
 #define URG_DEFAULT_PORT		"/dev/ttyS6"
+#define URG_NB_OF_CLUSTERS		7
 
 extern "C" __EXPORT int urg_main(int argc, char *argv[]);
 
@@ -171,13 +172,17 @@ int urg_thread_main(int argc, char *argv[]) {
 	memset(&local_pos, 0, sizeof(local_pos));
 	struct vehicle_local_position_setpoint_s local_pos_sp;
 	memset(&local_pos_sp, 0, sizeof(local_pos_sp));
+	struct obstacle_detection_s obstacle_detection;
+	memset(&obstacle_detection, 0, sizeof(obstacle_detection));
 
 	/* Subscribe to uORB topics */
 	int local_pos_sub = orb_subscribe(ORB_ID(vehicle_local_position));
+	int local_pos_sp_sub = orb_subscribe(ORB_ID(vehicle_local_position_setpoint));
 	int parameter_update_sub = orb_subscribe(ORB_ID(parameter_update));
 
 	/* Advertise on actuators topic */
 	orb_advert_t local_pos_sp_pub = orb_advertise(ORB_ID(vehicle_local_position_setpoint), &local_pos_sp);
+	orb_advert_t obstacle_detection_pub = orb_advertise(ORB_ID(obstacle_detection), &obstacle_detection);
 
 	/* Initialize parameter handles */
 	struct urg_params params;
@@ -204,6 +209,11 @@ int urg_thread_main(int argc, char *argv[]) {
 	/* Variable initializations */
 	int error_counter = 0;
 	hrt_abstime t_prev = 0;		// Absolute time of previous iteration of main loop
+	int* distances[];
+	int distances_avg[URG_NB_OF_CLUSTERS];
+	bool distances_avg_inited = false;
+	bool sp_reached[2] = {false, false};
+	int sp_number = 0;
 
 	/*
 	* URG UART port initializations
@@ -278,9 +288,23 @@ int urg_thread_main(int argc, char *argv[]) {
 		//compile for you to keep working
 		int step;
 		int err = 0;
-		int* distances = laser.getRangeResponse(&step, &err);
+		distances = laser.getRangeResponse(&step, &err);
 
-		int distance = distances[6];
+		if (!distances_avg_inited) {
+			distances_avg = distances;
+			distances_avg_inited = true;
+		}
+
+		for (int i = 0; i < URG_NB_OF_CLUSTERS; i++) {
+			/* If distance is greater than 10mm, take the value in count to measure average. */
+			if (distances[i] > 10) {
+				distances_avg[i] += (distances[i] - distances_avg[i]) * 0.5;
+			}
+			/* If distance is lower than 10mm, lidar is reading infinity. Adjust avg towards 5000mm. */
+			else {
+				distances_avg[i] += (5000 - distances_avg[i]) * 0.5;
+			}
+		}
 
 		/* Wait for update for 1000 ms */
 		int poll_result = poll(fds, 1, 1000);
@@ -308,8 +332,9 @@ int urg_thread_main(int argc, char *argv[]) {
 
 	 	} else {
 
-	 		/* Parameter update */
 	 		bool updated;
+
+	 		/* Parameter update */
 	 		orb_check(parameter_update_sub, &updated);
 	 		if (updated) {
 	 			struct parameter_update_s update;
@@ -317,13 +342,72 @@ int urg_thread_main(int argc, char *argv[]) {
 	 			parameters_update(&urg_param_handles, &params);
 	 		}
 
+	 		/* Update position setpoints */
+	 		orb_check(local_pos_sp_sub, &updated);
+			if (updated) {
+				if (!obstacle_detection.obstacle_detected) {
+					/* Keep latest setpoint before switching to obstacle avoidance mode */
+					orb_copy(ORB_ID(vehicle_local_position_setpoint), local_pos_sp_sub, &local_pos_sp);
+				}
+			}
+
 	 		/* Poll data */
 	 		if (fds[0].revents & POLLIN) {
 
 	 			/* Copy data to local buffer */
+
 	 			orb_copy(ORB_ID(vehicle_local_position), local_pos_sub, &local_pos);
 
-	 			/* Do stuff */
+	 			/* Find the minimum (closest) distance from the distances array */
+	 			int min_avg_dist = distances_avg[0];
+
+	 			for (int i = 0; i < URG_NB_OF_CLUSTERS; i++) {
+	 				if (distances_avg[i] < min_avg_dist) {
+	 					min_avg_dist = distances_avg[i];
+	 				}
+	 			}
+
+	 			/* Check if previous setpoint has been reached */
+	 			if (obstacle_detection.obstacle_detected) {
+	 				if (((local_pos(0) < obstacle_detection.x_sp + 0.1) || (local_pos(0) > obstacle_detection.x_sp - 0.1)) &&
+						((local_pos(1) < obstacle_detection.y_sp + 0.1) || (local_pos(1) > obstacle_detection.y_sp - 0.1)) &&
+						((local_pos(2) < obstacle_detection.z_sp + 0.1) || (local_pos(2) > obstacle_detection.z_sp - 0.1))) {
+
+	 					sp_reached[sp_number - 1] = true;
+	 				}
+	 			}
+
+	 			/* Activate obstacle detection mode if closest obstacle is close enough */
+	 			if (min_avg_dist < 2000) { //TODO: make this a param
+	 				obstacle_detection.obstacle_detected = true;
+	 				obstacle_detection.timestamp = hrt_absolute_time();
+
+	 			/* Deactivate obstacle detection mode if no threat is detected within timeout time after reaching new setpoint */
+	 			} else if (obstacle_detection.timestamp + 2000 < hrt_absolute_time() && sp_reached[1] == true) { //TODO: make timeout a parameter
+	 				obstacle_detection.obstacle_detected = false;
+	 				sp_reached = {false, false};
+					}
+	 			}
+
+	 			if (sp_reached[0] == 0) {
+	 				/* First setpoint */
+	 				/* Set climbing setpoint (climb to 2.5m) at current position */
+	 				sp_number = 1;
+					obstacle_detection.x_sp = local_pos.x;
+					obstacle_detection.y_sp = local_pos.y;
+					obstacle_detection.z_sp = -2.5f;
+	 			} else if (sp_reached[1] == 0) {
+	 				/* Second setpoint */
+	 				/* Fly to original setpoint at 2.5m altitude */
+	 				sp_number = 2;
+	 				obstacle_detection.x_sp = local_pos_sp.x;
+					obstacle_detection.y_sp = local_pos_sp.y;
+					obstacle_detection.z_sp = -2.5f;
+	 			}
+
+	 			//TODO: switch to XY avoidance setpoint
+
+	 			orb_publish(ORB_ID(obstacle_detection), obstacle_detection_pub, &obstacle_detection);
 
 	 		}
 	 	}
@@ -332,7 +416,8 @@ int urg_thread_main(int argc, char *argv[]) {
 	 	//local_pos_sp.x = something;
 
 	 	/* Publish output */
-	 	orb_publish(ORB_ID(vehicle_local_position_setpoint), local_pos_sp_pub, &local_pos_sp);
+	 	//orb_publish(ORB_ID(vehicle_local_position_setpoint), local_pos_sp_pub, &local_pos_sp);
+
 
 	 }
 
