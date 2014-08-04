@@ -26,3 +26,19 @@ static char scip_checksum(const char buffer[], int size)
 
     return (sum & 0x3f) + 0x30;
 }
+
+static int byteDecode3(uint8_t first, uint8_t second, uint8_t third)
+{
+	const uint8_t mask = 0x003f;	//keep first 6 bits
+	first	-= 0x30;
+	second	-= 0x30;
+	third	-= 0x30;
+
+	//get first 6 bits
+	uint32_t _first = first	& mask;
+	uint32_t _second = second & mask;
+	uint32_t _third = third	& mask;
+
+	int result = 0;
+	result = (first << 12) | (_second << 6) | _third;
+}

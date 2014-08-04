@@ -278,7 +278,9 @@ int urg_thread_main(int argc, char *argv[]) {
 		//compile for you to keep working
 		int step;
 		int err = 0;
-		int closestPoint = laser.getRangeResponse(&step, &err);
+		int* distances = laser.getRangeResponse(&step, &err);
+
+		int distance = distances[6];
 
 		/* Wait for update for 1000 ms */
 		int poll_result = poll(fds, 1, 1000);

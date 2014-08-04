@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <string.h> 
 
 #include "ring_buffer.h"
 #include "scip.h"
@@ -81,7 +82,7 @@ bool URG04LX::scanRange(urg_range_data_byte_t comRange,
 	else
 		return true;
 }
-
+/*
 bool verifyMeasurementResponse(urg_measurement_resp_t* response)
 {
 	//todo add more checks
@@ -90,12 +91,12 @@ bool verifyMeasurementResponse(urg_measurement_resp_t* response)
 	else
 		return false;
 }
-
-int URG04LX::getRangeResponse(int* step, int* err)
+*/
+int* URG04LX::getRangeResponse(int* step, int* err)
 {
 	//see page 5 of http://www.hokuyo-aut.jp/02sensor/07scanner/download/pdf/URG_SCIP20.pdf
 	if(!scanRange(URG_COMMUNICATION_3_BYTE, 44, 725, 99, 0, 1)){
-		return -1;
+		return 0;
 	}
 
 	const int EXPECTED_LF_COUNT = 6;
@@ -110,8 +111,10 @@ int URG04LX::getRangeResponse(int* step, int* err)
 		}
 	}
 
-	//reception end, time to parse
-	char c;
+	char* data = new char[ring_size(&_rbuf)];
+
+
+	return 0;
 }
 
 bool URG04LX::recvByte()
