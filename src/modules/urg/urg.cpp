@@ -85,7 +85,7 @@
 #define URG_MIN_DISTANCE		0.0f
 #define URG_MAX_DISTANCE		40.0f
 #define URG_DEFAULT_PORT		"/dev/ttyS6"
-#define URG_NB_OF_CLUSTERS		7
+#define URG_NB_OF_CLUSTERS		15
 
 extern "C" __EXPORT int urg_main(int argc, char *argv[]);
 
@@ -209,11 +209,13 @@ int urg_thread_main(int argc, char *argv[]) {
 	/* Variable initializations */
 	int error_counter = 0;
 	hrt_abstime t_prev = 0;		// Absolute time of previous iteration of main loop
-	int* distances[];
+	int* distances;
 	int distances_avg[URG_NB_OF_CLUSTERS];
 	bool distances_avg_inited = false;
 	bool sp_reached[2] = {false, false};
 	int sp_number = 0;
+	bool lidar_updated = false;
+	hrt_abstime lidar_update_t;
 
 	/*
 	* URG UART port initializations
@@ -282,38 +284,43 @@ int urg_thread_main(int argc, char *argv[]) {
 
 	while (!thread_should_exit) {
 
-		/* Read UART buffer & parse messages */
-		// TODO: Andre's magic
-		//Antonio, use this for now, it will always return 0 but should at least
-		//compile for you to keep working
-		int step;
-		int err = 0;
-		distances = laser.getRangeResponse(&step, &err);
 
-		if (!distances_avg_inited) {
-			distances_avg = distances;
+		/* Calculate time difference since last iteration of loop */
+		hrt_abstime t = hrt_absolute_time();
+		float dt = t_prev > 0 ? (t - t_prev) / 1000000.0f : 0.0f;
+		//dt = fmaxf(fminf(0.05, dt), 0.005);		// Constrain dt from 5 to 50 ms
+		t_prev = t;
+
+		/* Read UART buffer & parse messages */
+		if (t > lidar_update_t + 200000.0f) {
+			lidar_update_t = t;
+			lidar_updated = true;
+			distances = laser.getRangeResponse();
+		}
+
+		if (!distances_avg_inited && lidar_updated) {
+			for (int i = 0; i < URG_NB_OF_CLUSTERS; i++) {
+			distances_avg[i] = distances[i];
+			}
 			distances_avg_inited = true;
 		}
 
-		for (int i = 0; i < URG_NB_OF_CLUSTERS; i++) {
-			/* If distance is greater than 10mm, take the value in count to measure average. */
-			if (distances[i] > 10) {
-				distances_avg[i] += (distances[i] - distances_avg[i]) * 0.5;
+		if (lidar_updated) {
+			for (int i = 0; i < URG_NB_OF_CLUSTERS; i++) {
+				/* If distance is greater than 20mm, take the value in count to measure average. */
+				if (distances[i] > 20) {
+					distances_avg[i] += (distances[i] - distances_avg[i]) * 0.5;
+				}
+				/* If distance is lower than 10mm, lidar is reading infinity. Adjust avg towards 5000mm. */
+				else {
+					distances_avg[i] += (5000 - distances_avg[i]) * 0.5;
+				}
 			}
-			/* If distance is lower than 10mm, lidar is reading infinity. Adjust avg towards 5000mm. */
-			else {
-				distances_avg[i] += (5000 - distances_avg[i]) * 0.5;
-			}
+			lidar_updated = false;
 		}
 
 		/* Wait for update for 1000 ms */
 		int poll_result = poll(fds, 1, 1000);
-		hrt_abstime t = hrt_absolute_time();
-
-	 	/* Calculate time difference since last iteration of loop */
-	 	float dt = t_prev > 0 ? (t - t_prev) / 1000000.0f : 0.0f;
-	 	dt = fmaxf(fminf(0.05, dt), 0.005);		// Constrain dt from 5 to 50 ms
-	 	t_prev = t;
 
 	 	if (poll_result == 0) {
 	 		/* No new data */
@@ -369,23 +376,24 @@ int urg_thread_main(int argc, char *argv[]) {
 
 	 			/* Check if previous setpoint has been reached */
 	 			if (obstacle_detection.obstacle_detected) {
-	 				if (((local_pos(0) < obstacle_detection.x_sp + 0.1) || (local_pos(0) > obstacle_detection.x_sp - 0.1)) &&
-						((local_pos(1) < obstacle_detection.y_sp + 0.1) || (local_pos(1) > obstacle_detection.y_sp - 0.1)) &&
-						((local_pos(2) < obstacle_detection.z_sp + 0.1) || (local_pos(2) > obstacle_detection.z_sp - 0.1))) {
+	 				if (((local_pos.x < obstacle_detection.x_sp + 0.1) || (local_pos.x > obstacle_detection.x_sp - 0.1)) &&
+						((local_pos.y < obstacle_detection.y_sp + 0.1) || (local_pos.y > obstacle_detection.y_sp - 0.1)) &&
+						((local_pos.z < obstacle_detection.z_sp + 0.1) || (local_pos.z > obstacle_detection.z_sp - 0.1))) {
 
 	 					sp_reached[sp_number - 1] = true;
 	 				}
 	 			}
 
 	 			/* Activate obstacle detection mode if closest obstacle is close enough */
-	 			if (min_avg_dist < 2000) { //TODO: make this a param
+	 			if (min_avg_dist < 50) { //TODO: make this a param
 	 				obstacle_detection.obstacle_detected = true;
 	 				obstacle_detection.timestamp = hrt_absolute_time();
 
 	 			/* Deactivate obstacle detection mode if no threat is detected within timeout time after reaching new setpoint */
 	 			} else if (obstacle_detection.timestamp + 2000 < hrt_absolute_time() && sp_reached[1] == true) { //TODO: make timeout a parameter
 	 				obstacle_detection.obstacle_detected = false;
-	 				sp_reached = {false, false};
+	 				sp_reached[0] = false;
+	 				sp_reached[1] = false;
 					}
 	 			}
 
@@ -417,9 +425,6 @@ int urg_thread_main(int argc, char *argv[]) {
 
 	 	/* Publish output */
 	 	//orb_publish(ORB_ID(vehicle_local_position_setpoint), local_pos_sp_pub, &local_pos_sp);
-
-
-	 }
 
 	 ::close(_fd);
 	 warnx("stopped");

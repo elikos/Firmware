@@ -136,7 +136,7 @@ private:
 	struct position_setpoint_triplet_s		_pos_sp_triplet;	/**< vehicle global position setpoint triplet */
 	struct vehicle_local_position_setpoint_s	_local_pos_sp;		/**< vehicle local position setpoint */
 	struct vehicle_global_velocity_setpoint_s	_global_vel_sp;	/**< vehicle global velocity setpoint */
-	struct obstacle_detection_s			_obstacle_detection		/**< obstacle detection */
+	struct obstacle_detection_s			_obstacle_detection;	/**< obstacle detection */
 		
 
 	struct {

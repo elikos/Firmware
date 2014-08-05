@@ -73,11 +73,16 @@ public:
 	 * 		supplied intil quit is called.
 	 * @return returns if the command was succesfully sent
 	 */
-	bool scanRange(urg_range_data_byte_t comRange, 
-		int startStep, int endStep, int clusterCount, int scanInterval,
-		int numScans);
+	bool scanRange(urg_range_data_byte_t comRange,
+			int startStep, int endStep, int clusterCount, int scanInterval,
+			int numScans, int _fd);
 
-	int* getRangeResponse(int* step, int* err);
+	int* getRangeResponse();
+
+	int byteDecode3(uint8_t* bytes);
+
+	int verifyStatus(uint8_t* statusArray);
+
 private:
 	URG04LX(const URG04LX& rhs);
 	URG04LX& operator = (const URG04LX& rhs);
