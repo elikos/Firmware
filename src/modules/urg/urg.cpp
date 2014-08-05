@@ -216,9 +216,18 @@ int urg_thread_main(int argc, char *argv[]) {
 	int sp_number = 0;
 	bool lidar_updated = false;
 	hrt_abstime lidar_update_t;
+	int min_angle= 0;				// this parameter and following used to implement sideway dodge
+	int min_obstacle_detection = 2000;
+	int DANGER_ZONE = 1500;
+	float PI = 3.14159265359;
+	/*angle table initialisation based on URG_NB_OF_CLUSTERS */
+			
+	int urg_angle_table[URG_NB_OF_CLUSTERS];
+	for (int i = 0; i< URG_NB_OF_CLUSTERS; i++){
+		urg_angle_table[i] = 91 - (180/URG_NB_OF_CLUSTERS)*i
+	}
 
-	/*
-	* URG UART port initializations
+	/* URG UART port initializations
 	*/
 
 	/* Open fd */
@@ -357,7 +366,9 @@ int urg_thread_main(int argc, char *argv[]) {
 					orb_copy(ORB_ID(vehicle_local_position_setpoint), local_pos_sp_sub, &local_pos_sp);
 				}
 			}
+			
 
+			
 	 		/* Poll data */
 	 		if (fds[0].revents & POLLIN) {
 
@@ -366,53 +377,59 @@ int urg_thread_main(int argc, char *argv[]) {
 	 			orb_copy(ORB_ID(vehicle_local_position), local_pos_sub, &local_pos);
 
 	 			/* Find the minimum (closest) distance from the distances array */
-	 			int min_avg_dist = distances_avg[0];
+	 			float min_avg_dist = distances_avg[0]/1000;
 
 	 			for (int i = 0; i < URG_NB_OF_CLUSTERS; i++) {
 	 				if (distances_avg[i] < min_avg_dist) {
-	 					min_avg_dist = distances_avg[i];
+	 					min_avg_dist = distances_avg[i]/1000;
+	 					min_angle = i;
 	 				}
 	 			}
-
-	 			/* Check if previous setpoint has been reached */
-	 			if (obstacle_detection.obstacle_detected) {
-	 				if (((local_pos.x < obstacle_detection.x_sp + 0.1) || (local_pos.x > obstacle_detection.x_sp - 0.1)) &&
-						((local_pos.y < obstacle_detection.y_sp + 0.1) || (local_pos.y > obstacle_detection.y_sp - 0.1)) &&
-						((local_pos.z < obstacle_detection.z_sp + 0.1) || (local_pos.z > obstacle_detection.z_sp - 0.1))) {
-
-	 					sp_reached[sp_number - 1] = true;
-	 				}
-	 			}
-
+			
 	 			/* Activate obstacle detection mode if closest obstacle is close enough */
-	 			if (min_avg_dist < 50) { //TODO: make this a param
+				 if (min_avg_dist < min_obstacle_detection) { //TODO: make this a param
 	 				obstacle_detection.obstacle_detected = true;
 	 				obstacle_detection.timestamp = hrt_absolute_time();
+	 				/* symboles magiques : a updater */
+	 				float F = d*sin(min_angle*2*PI/360);
+	 				float deltaX = d*sin(min_angle*2*PI/360);
+	 				float deltaY = DANGER_ZONE - abs(F);
 
+					// application d'une rotation de Yaw
+					if (deltaY > 0){
+					float deltaX_yawed = deltaX*cos(YAW) - deltaY*sin(YAW);
+					float deltaY_yawed = deltaX*sin(YAW) + deltaY*cos(YAW);
+					
+					// determination des nouvelles coordonnes en x,y
+					obstacle_detection.x_sp = local_pos.x + deltaX_yawed;
+					obstacle_detection.y_sp = local_pos.y + deltaY_yawed;
+					obstacle_detection.z_sp = local_pos.z;
+					}
+	 				}
+					
 	 			/* Deactivate obstacle detection mode if no threat is detected within timeout time after reaching new setpoint */
-	 			} else if (obstacle_detection.timestamp + 2000 < hrt_absolute_time() && sp_reached[1] == true) { //TODO: make timeout a parameter
+	 			else if (obstacle_detection.timestamp + 2000 < hrt_absolute_time()) { //TODO: make timeout a parameter
 	 				obstacle_detection.obstacle_detected = false;
-	 				sp_reached[0] = false;
-	 				sp_reached[1] = false;
 					}
 	 			}
 
-	 			if (sp_reached[0] == 0) {
+				
+	 	/*		if (sp_reached[0] == 0) {
 	 				/* First setpoint */
 	 				/* Set climbing setpoint (climb to 2.5m) at current position */
-	 				sp_number = 1;
+	 	/*		p_number = 1;
 					obstacle_detection.x_sp = local_pos.x;
 					obstacle_detection.y_sp = local_pos.y;
 					obstacle_detection.z_sp = -2.5f;
 	 			} else if (sp_reached[1] == 0) {
 	 				/* Second setpoint */
 	 				/* Fly to original setpoint at 2.5m altitude */
-	 				sp_number = 2;
+	 	/*		p_number = 2;
 	 				obstacle_detection.x_sp = local_pos_sp.x;
 					obstacle_detection.y_sp = local_pos_sp.y;
 					obstacle_detection.z_sp = -2.5f;
 	 			}
-
+		*/
 	 			//TODO: switch to XY avoidance setpoint
 
 	 			orb_publish(ORB_ID(obstacle_detection), obstacle_detection_pub, &obstacle_detection);
