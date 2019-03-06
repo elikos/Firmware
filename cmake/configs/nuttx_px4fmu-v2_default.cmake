@@ -128,6 +128,9 @@ set(config_module_list
 	modules/mc_pos_control
 	modules/vtol_att_control
 
+	# Custom elikos module
+	modules/robotic_arm_controller
+
 	#
 	# Logging
 	#
