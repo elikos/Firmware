@@ -184,7 +184,7 @@ RoboticArmController::RoboticArmController(int example_param, bool example_flag)
 }
 
 
-void Module::parameters_update(int parameter_update_sub, bool force)
+void RoboticArmController::parameters_update(int parameter_update_sub, bool force)
 {
 	bool updated;
 	struct parameter_update_s param_upd;
@@ -254,7 +254,7 @@ void RoboticArmController::run() //code d'arnaud
     }
 }
 
-int module_main(int argc, char *argv[])
+int robotic_arm_controller_main(int argc, char *argv[])
 {
 	return RoboticArmController::main(argc, argv);
 }
