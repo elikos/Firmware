@@ -240,7 +240,7 @@ void RoboticArmController::run() //code d'arnaud
 
                     // params[0] actuator number to be set 0..5 (corresponds to AUX outputs 1..6)
                     // params[1] new value for selected actuator in ms 900...2000
-                    actuators.control[(int)cmd.param1] = -1.0f / 2000 * cmd.param2;
+                    actuators.control[(int)cmd.param1] = 2 * cmd.param2/1000 - 3;
 
                     if (_actuator_pub != nullptr) {
                         orb_publish(ORB_ID(actuator_controls_2), _actuator_pub, &actuators);
