@@ -72,13 +72,16 @@ int RoboticArmController::print_usage(const char *reason)
 	PRINT_MODULE_DESCRIPTION(
 		R"DESCR_STR(
 		### Description
-		Section that describes the provided module functionality.
-		This is a template for a module running as a task in the background with start/stop/status functionality.
+		This is a module that offers servo control from MAV_CMD_DO_SET_SERVO
+        (ID = 183) commands. The commands are sent from a telemetry connection
+        to the fcu using the mavlink message COMMAND_INT.
 		### Implementation
-		Section describing the high-level implementation of this module.
+		Reads messages from vehicle_commands and sets the actuator_controls_2
+        control group.
 		### Examples
 		CLI usage example:
-		$ module start -f -p 42
+		$ robot_arm_controller start
+        starts the controller
 		)DESCR_STR");
 
 	PRINT_MODULE_USAGE_NAME("module", "template");
